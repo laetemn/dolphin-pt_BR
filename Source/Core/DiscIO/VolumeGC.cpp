@@ -6,10 +6,12 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Common/ColorUtil.h"
 #include "Common/CommonTypes.h"
+#include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 #include "Common/Logging/Log.h"
 #include "DiscIO/Blob.h"
@@ -20,8 +22,8 @@
 
 namespace DiscIO
 {
-CVolumeGC::CVolumeGC(IBlobReader* _pReader)
-	: m_pReader(_pReader)
+CVolumeGC::CVolumeGC(std::unique_ptr<IBlobReader> reader)
+	: m_pReader(std::move(reader))
 {}
 
 CVolumeGC::~CVolumeGC()
@@ -117,11 +119,10 @@ std::string CVolumeGC::GetCompany() const
 	if (!LoadBannerFile())
 		return "";
 
-	auto const pBanner = (GCBanner*)m_banner_file.data();
-	std::string company = DecodeString(pBanner->comment[0].longMaker);
+	std::string company = DecodeString(m_banner_file.comment[0].longMaker);
 
 	if (company.empty())
-		company = DecodeString(pBanner->comment[0].shortMaker);
+		company = DecodeString(m_banner_file.comment[0].shortMaker);
 
 	return company;
 }
@@ -136,14 +137,13 @@ std::vector<u32> CVolumeGC::GetBanner(int* width, int* height) const
 	}
 
 	std::vector<u32> image_buffer(GC_BANNER_WIDTH * GC_BANNER_HEIGHT);
-	auto const pBanner = (GCBanner*)m_banner_file.data();
-	ColorUtil::decode5A3image(image_buffer.data(), pBanner->image, GC_BANNER_WIDTH, GC_BANNER_HEIGHT);
+	ColorUtil::decode5A3image(image_buffer.data(), m_banner_file.image, GC_BANNER_WIDTH, GC_BANNER_HEIGHT);
 	*width = GC_BANNER_WIDTH;
 	*height = GC_BANNER_HEIGHT;
 	return image_buffer;
 }
 
-u32 CVolumeGC::GetFSTSize() const
+u64 CVolumeGC::GetFSTSize() const
 {
 	if (m_pReader == nullptr)
 		return 0;
@@ -165,6 +165,11 @@ std::string CVolumeGC::GetApploaderDate() const
 		return std::string();
 
 	return DecodeString(date);
+}
+
+BlobType CVolumeGC::GetBlobType() const
+{
+	return m_pReader ? m_pReader->GetBlobType() : BlobType::PLAIN;
 }
 
 u64 CVolumeGC::GetSize() const
@@ -213,28 +218,26 @@ bool CVolumeGC::LoadBannerFile() const
 	size_t file_size = (size_t)file_system->GetFileSize("opening.bnr");
 	if (file_size == BNR1_SIZE || file_size == BNR2_SIZE)
 	{
-		m_banner_file.resize(file_size);
-		file_system->ReadFile("opening.bnr", m_banner_file.data(), m_banner_file.size());
+		file_system->ReadFile("opening.bnr", reinterpret_cast<u8*>(&m_banner_file), file_size);
 
-		u32 bannerSignature = *(u32*)m_banner_file.data();
-		if (file_size == BNR1_SIZE && bannerSignature == 0x31524e42)        // "BNR1"
+		if (file_size == BNR1_SIZE && m_banner_file.id == 0x31524e42)      // "BNR1"
 		{
 			m_banner_file_type = BANNER_BNR1;
 		}
-		else if (file_size == BNR2_SIZE && bannerSignature == 0x32524e42)   // "BNR2"
+		else if (file_size == BNR2_SIZE && m_banner_file.id == 0x32524e42) // "BNR2"
 		{
 			m_banner_file_type = BANNER_BNR2;
 		}
 		else
 		{
 			m_banner_file_type = BANNER_INVALID;
-			WARN_LOG(DISCIO, "Invalid opening.bnr. Type: %0x Size: %0lx", bannerSignature, (unsigned long)file_size);
+			WARN_LOG(DISCIO, "Invalid opening.bnr. Type: %0x Size: %0zx", m_banner_file.id, file_size);
 		}
 	}
 	else
 	{
 		m_banner_file_type = BANNER_INVALID;
-		WARN_LOG(DISCIO, "Invalid opening.bnr. Size: %0lx", (unsigned long)file_size);
+		WARN_LOG(DISCIO, "Invalid opening.bnr. Size: %0zx", file_size);
 	}
 
 	return m_banner_file_type != BANNER_INVALID;
@@ -248,7 +251,7 @@ std::map<IVolume::ELanguage, std::string> CVolumeGC::ReadMultiLanguageStrings(bo
 		return strings;
 
 	u32 number_of_languages = 0;
-	ELanguage start_language;
+	ELanguage start_language = LANGUAGE_UNKNOWN;
 	bool is_japanese = GetCountry() == ECountry::COUNTRY_JAPAN;
 
 	switch (m_banner_file_type)
@@ -269,11 +272,9 @@ std::map<IVolume::ELanguage, std::string> CVolumeGC::ReadMultiLanguageStrings(bo
 		break;
 	}
 
-	auto const banner = reinterpret_cast<const GCBanner*>(m_banner_file.data());
-
 	for (u32 i = 0; i < number_of_languages; ++i)
 	{
-		GCBannerComment comment = banner->comment[i];
+		const GCBannerComment& comment = m_banner_file.comment[i];
 		std::string string;
 
 		if (description)

@@ -5,10 +5,12 @@
 #include <cstddef>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
-#include <polarssl/aes.h>
-#include <polarssl/sha1.h>
+#include <mbedtls/aes.h>
+#include <mbedtls/sha1.h>
 
 #include "Common/CommonFuncs.h"
 #include "Common/CommonTypes.h"
@@ -25,16 +27,16 @@
 namespace DiscIO
 {
 
-CVolumeWiiCrypted::CVolumeWiiCrypted(IBlobReader* _pReader, u64 _VolumeOffset,
+CVolumeWiiCrypted::CVolumeWiiCrypted(std::unique_ptr<IBlobReader> reader, u64 _VolumeOffset,
 									 const unsigned char* _pVolumeKey)
-	: m_pReader(_pReader),
-	m_AES_ctx(new aes_context),
+	: m_pReader(std::move(reader)),
+	m_AES_ctx(new mbedtls_aes_context),
 	m_pBuffer(nullptr),
 	m_VolumeOffset(_VolumeOffset),
 	m_dataOffset(0x20000),
 	m_LastDecryptedBlockOffset(-1)
 {
-	aes_setkey_dec(m_AES_ctx.get(), _pVolumeKey, 128);
+	mbedtls_aes_setkey_dec(m_AES_ctx.get(), _pVolumeKey, 128);
 	m_pBuffer = new u8[s_block_total_size];
 }
 
@@ -44,8 +46,8 @@ bool CVolumeWiiCrypted::ChangePartition(u64 offset)
 	m_LastDecryptedBlockOffset = -1;
 
 	u8 volume_key[16];
-	DiscIO::VolumeKeyForParition(*m_pReader, offset, volume_key);
-	aes_setkey_dec(m_AES_ctx.get(), volume_key, 128);
+	DiscIO::VolumeKeyForPartition(*m_pReader, offset, volume_key);
+	mbedtls_aes_setkey_dec(m_AES_ctx.get(), volume_key, 128);
 	return true;
 }
 
@@ -81,7 +83,7 @@ bool CVolumeWiiCrypted::Read(u64 _ReadOffset, u64 _Length, u8* _pBuffer, bool de
 			// 0x3D0 - 0x3DF in m_pBuffer will be overwritten,
 			// but that won't affect anything, because we won't
 			// use the content of m_pBuffer anymore after this
-			aes_crypt_cbc(m_AES_ctx.get(), AES_DECRYPT, s_block_data_size, m_pBuffer + 0x3D0,
+			mbedtls_aes_crypt_cbc(m_AES_ctx.get(), MBEDTLS_AES_DECRYPT, s_block_data_size, m_pBuffer + 0x3D0,
 			              m_pBuffer + s_block_header_size, m_LastDecryptedBlock);
 			m_LastDecryptedBlockOffset = Block;
 
@@ -105,11 +107,15 @@ bool CVolumeWiiCrypted::Read(u64 _ReadOffset, u64 _Length, u8* _pBuffer, bool de
 	return true;
 }
 
-bool CVolumeWiiCrypted::GetTitleID(u8* _pBuffer) const
+bool CVolumeWiiCrypted::GetTitleID(u64* buffer) const
 {
 	// Tik is at m_VolumeOffset size 0x2A4
 	// TitleID offset in tik is 0x1DC
-	return Read(m_VolumeOffset + 0x1DC, 8, _pBuffer, false);
+	if (!Read(m_VolumeOffset + 0x1DC, sizeof(u64), reinterpret_cast<u8*>(buffer), false))
+		return false;
+
+	*buffer = Common::swap64(*buffer);
+	return true;
 }
 
 std::unique_ptr<u8[]> CVolumeWiiCrypted::GetTMD(u32 *size) const
@@ -206,7 +212,7 @@ std::map<IVolume::ELanguage, std::string> CVolumeWiiCrypted::GetNames(bool prefe
 	return ReadWiiNames(opening_bnr);
 }
 
-u32 CVolumeWiiCrypted::GetFSTSize() const
+u64 CVolumeWiiCrypted::GetFSTSize() const
 {
 	if (m_pReader == nullptr)
 		return 0;
@@ -216,7 +222,7 @@ u32 CVolumeWiiCrypted::GetFSTSize() const
 	if (!Read(0x428, 0x4, (u8*)&size, true))
 		return 0;
 
-	return Common::swap32(size);
+	return (u64)Common::swap32(size) << 2;
 }
 
 std::string CVolumeWiiCrypted::GetApploaderDate() const
@@ -242,6 +248,11 @@ u8 CVolumeWiiCrypted::GetDiscNumber() const
 	u8 disc_number;
 	m_pReader->Read(6, 1, &disc_number);
 	return disc_number;
+}
+
+BlobType CVolumeWiiCrypted::GetBlobType() const
+{
+	return m_pReader ? m_pReader->GetBlobType() : BlobType::PLAIN;
 }
 
 u64 CVolumeWiiCrypted::GetSize() const
@@ -281,7 +292,7 @@ bool CVolumeWiiCrypted::CheckIntegrity() const
 			NOTICE_LOG(DISCIO, "Integrity Check: fail at cluster %d: could not read metadata", clusterID);
 			return false;
 		}
-		aes_crypt_cbc(m_AES_ctx.get(), AES_DECRYPT, 0x400, IV, clusterMDCrypted, clusterMD);
+		mbedtls_aes_crypt_cbc(m_AES_ctx.get(), MBEDTLS_AES_DECRYPT, 0x400, IV, clusterMDCrypted, clusterMD);
 
 
 		// Some clusters have invalid data and metadata because they aren't
@@ -311,7 +322,7 @@ bool CVolumeWiiCrypted::CheckIntegrity() const
 		{
 			u8 hash[20];
 
-			sha1(clusterData + hashID * 0x400, 0x400, hash);
+			mbedtls_sha1(clusterData + hashID * 0x400, 0x400, hash);
 
 			// Note that we do not use strncmp here
 			if (memcmp(hash, clusterMD + hashID * 20, 20))

@@ -84,11 +84,11 @@ void HiresTexture::Update()
 	std::string szDir = StringFromFormat("%s%s", File::GetUserPath(D_HIRESTEXTURES_IDX).c_str(), gameCode.c_str());
 
 	std::vector<std::string> Extensions {
-		"*.png",
-		"*.bmp",
-		"*.tga",
-		"*.dds",
-		"*.jpg" // Why not? Could be useful for large photo-like textures
+		".png",
+		".bmp",
+		".tga",
+		".dds",
+		".jpg" // Why not? Could be useful for large photo-like textures
 	};
 
 	auto rFilenames = DoFileSearch(Extensions, {szDir}, /*recursive*/ true);
@@ -140,7 +140,10 @@ void HiresTexture::Prefetch()
 	Common::SetCurrentThreadName("Prefetcher");
 
 	size_t size_sum = 0;
-	size_t max_mem = MemPhysical() / 2;
+	size_t sys_mem = MemPhysical();
+	size_t recommended_min_mem = 2 * size_t(1024 * 1024 * 1024);
+	// keep 2GB memory for system stability if system RAM is 4GB+ - use half of memory in other cases
+	size_t max_mem = (sys_mem / 2 < recommended_min_mem) ? (sys_mem / 2) : (sys_mem - recommended_min_mem);
 	u32 starttime = Common::Timer::GetTimeMs();
 	for (const auto& entry : s_textureMap)
 	{

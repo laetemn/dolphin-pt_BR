@@ -11,7 +11,9 @@
 #include <thread>
 #include <vector>
 
+#include "Common/Common.h"
 #include "Common/FifoQueue.h"
+#include "Common/NonCopyable.h"
 #include "Common/Timer.h"
 #include "Core/HW/Wiimote.h"
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
@@ -99,11 +101,11 @@ private:
 
 	std::thread               m_wiimote_thread;
 	// Whether to keep running the thread.
-	std::atomic<bool>         m_run_thread;
+	std::atomic<bool>         m_run_thread {false};
 	// Whether to call PrepareOnThread.
-	std::atomic<bool>         m_need_prepare;
+	std::atomic<bool>         m_need_prepare {false};
 	// Whether the thread has finished ConnectInternal.
-	std::atomic<bool>         m_thread_ready;
+	std::atomic<bool>         m_thread_ready {false};
 	std::mutex                m_thread_ready_mutex;
 	std::condition_variable   m_thread_ready_cond;
 
@@ -137,9 +139,9 @@ private:
 
 	std::thread m_scan_thread;
 
-	std::atomic<bool> m_run_thread;
-	std::atomic<bool> m_want_wiimotes;
-	std::atomic<bool> m_want_bb;
+	std::atomic<bool> m_run_thread {false};
+	std::atomic<bool> m_want_wiimotes {false};
+	std::atomic<bool> m_want_bb {false};
 
 #if defined(_WIN32)
 	void CheckDeviceType(std::basic_string<TCHAR> &devicepath, bool &real_wiimote, bool &is_bb);
@@ -158,10 +160,7 @@ void ControlChannel(int _WiimoteNumber, u16 _channelID, const void* _pData, u32 
 void Update(int _WiimoteNumber);
 void ConnectOnInput(int _WiimoteNumber);
 
-void DoState(PointerWrap &p);
 void StateChange(EMUSTATE_CHANGE newState);
-
-int FindWiimotes(Wiimote** wm, int max_wiimotes);
 void ChangeWiimoteSource(unsigned int index, int source);
 
 bool IsValidBluetoothName(const std::string& name);

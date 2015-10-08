@@ -131,7 +131,7 @@ void CWII_IPC_HLE_Device_usb_oh1_57e_305::DoState(PointerWrap &p)
 	p.DoPOD(m_HCIEndpoint);
 	p.DoPOD(m_ACLEndpoint);
 	p.Do(m_last_ticks);
-	p.DoArray(m_PacketCount,MAX_BBMOTES);
+	p.DoArray(m_PacketCount);
 	p.Do(m_ScanEnable);
 	p.Do(m_EventQueue);
 	m_acl_pool.DoState(p);
@@ -157,7 +157,7 @@ IPCCommandResult CWII_IPC_HLE_Device_usb_oh1_57e_305::Open(u32 _CommandAddress, 
 
 	Memory::Write_U32(GetDeviceID(), _CommandAddress + 4);
 	m_Active = true;
-	return IPC_DEFAULT_REPLY;
+	return GetDefaultReply();
 }
 
 IPCCommandResult CWII_IPC_HLE_Device_usb_oh1_57e_305::Close(u32 _CommandAddress, bool _bForce)
@@ -173,7 +173,7 @@ IPCCommandResult CWII_IPC_HLE_Device_usb_oh1_57e_305::Close(u32 _CommandAddress,
 	if (!_bForce)
 		Memory::Write_U32(0, _CommandAddress + 4);
 	m_Active = false;
-	return IPC_DEFAULT_REPLY;
+	return GetDefaultReply();
 }
 
 IPCCommandResult CWII_IPC_HLE_Device_usb_oh1_57e_305::IOCtl(u32 _CommandAddress)
@@ -320,7 +320,7 @@ IPCCommandResult CWII_IPC_HLE_Device_usb_oh1_57e_305::IOCtlV(u32 _CommandAddress
 
 	// write return value
 	Memory::Write_U32(0, _CommandAddress + 4);
-	return { _SendReply, IPC_DEFAULT_DELAY };
+	return _SendReply ? GetDefaultReply() : GetNoReply();
 }
 
 
@@ -401,15 +401,14 @@ void CWII_IPC_HLE_Device_usb_oh1_57e_305::AddEventToQueue(const SQueuedEvent& _e
 		}
 		else // push new one, pop oldest
 		{
-			DEBUG_LOG(WII_IPC_WIIMOTE, "HCI endpoint not "
-				"currently valid, queueing(%lu)...",
-				(unsigned long)m_EventQueue.size());
+			DEBUG_LOG(WII_IPC_WIIMOTE, "HCI endpoint not currently valid, queueing (%zu)...",
+				m_EventQueue.size());
 			m_EventQueue.push_back(_event);
 			const SQueuedEvent& event = m_EventQueue.front();
 			DEBUG_LOG(WII_IPC_WIIMOTE, "HCI event %x "
-				"being written from queue(%lu) to %08x...",
+				"being written from queue (%zu) to %08x...",
 				((hci_event_hdr_t*)event.m_buffer)->event,
-				(unsigned long)m_EventQueue.size()-1,
+				m_EventQueue.size()-1,
 				m_HCIEndpoint.m_address);
 			m_HCIEndpoint.FillBuffer(event.m_buffer, event.m_size);
 			m_HCIEndpoint.SetRetVal(event.m_size);
@@ -421,8 +420,7 @@ void CWII_IPC_HLE_Device_usb_oh1_57e_305::AddEventToQueue(const SQueuedEvent& _e
 	}
 	else
 	{
-		DEBUG_LOG(WII_IPC_WIIMOTE, "HCI endpoint not currently valid, "
-			"queuing(%lu)...", (unsigned long)m_EventQueue.size());
+		DEBUG_LOG(WII_IPC_WIIMOTE, "HCI endpoint not currently valid, queuing (%zu)...", m_EventQueue.size());
 		m_EventQueue.push_back(_event);
 	}
 }
@@ -437,9 +435,9 @@ u32 CWII_IPC_HLE_Device_usb_oh1_57e_305::Update()
 		// an endpoint has become available, and we have a stored response.
 		const SQueuedEvent& event = m_EventQueue.front();
 		DEBUG_LOG(WII_IPC_WIIMOTE,
-			"HCI event %x being written from queue(%lu) to %08x...",
+			"HCI event %x being written from queue (%zu) to %08x...",
 			((hci_event_hdr_t*)event.m_buffer)->event,
-			(unsigned long)m_EventQueue.size()-1,
+			m_EventQueue.size()-1,
 			m_HCIEndpoint.m_address);
 		m_HCIEndpoint.FillBuffer(event.m_buffer, event.m_size);
 		m_HCIEndpoint.SetRetVal(event.m_size);

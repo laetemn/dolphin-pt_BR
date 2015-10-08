@@ -74,9 +74,6 @@ set(SRCS	ActionReplay.cpp
 			HW/DSPHLE/UCodes/ROM.cpp
 			HW/DSPHLE/UCodes/UCodes.cpp
 			HW/DSPHLE/UCodes/Zelda.cpp
-			HW/DSPHLE/UCodes/ZeldaADPCM.cpp
-			HW/DSPHLE/UCodes/ZeldaSynth.cpp
-			HW/DSPHLE/UCodes/ZeldaVoice.cpp
 			HW/DSPHLE/MailHandler.cpp
 			HW/DSPHLE/DSPHLE.cpp
 			HW/DSPLLE/DSPDebugInterface.cpp
@@ -245,7 +242,7 @@ if(LIBUSB_FOUND)
 	        	       	HW/SI_GCAdapter.cpp)
 endif(LIBUSB_FOUND)
 
-set(LIBS ${LIBS} ${POLARSSL_LIBRARY})
+set(LIBS ${LIBS} ${MBEDTLS_LIBRARIES})
 
 if(WIN32)
 	set(SRCS ${SRCS} HW/BBA-TAP/TAP_Win32.cpp HW/WiimoteReal/IOWin.cpp)

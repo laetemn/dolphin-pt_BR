@@ -295,7 +295,7 @@ void Renderer::DrawDebugText()
 	if (g_ActiveConfig.bShowFPS || SConfig::GetInstance().m_ShowFrameCount)
 	{
 		if (g_ActiveConfig.bShowFPS)
-			final_cyan += StringFromFormat("FPS: %d", g_renderer->m_fps_counter.m_fps);
+			final_cyan += StringFromFormat("FPS: %u", g_renderer->m_fps_counter.GetFPS());
 
 		if (g_ActiveConfig.bShowFPS && SConfig::GetInstance().m_ShowFrameCount)
 			final_cyan += " - ";
@@ -402,7 +402,7 @@ void Renderer::DrawDebugText()
 		}
 	}
 
-	final_cyan += Profiler::ToString();
+	final_cyan += Common::Profiler::ToString();
 
 	if (g_ActiveConfig.bOverlayStats)
 		final_cyan += Statistics::ToString();

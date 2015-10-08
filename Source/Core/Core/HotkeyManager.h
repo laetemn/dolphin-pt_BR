@@ -117,6 +117,11 @@ enum Hotkey
 	HK_SAVE_STATE_FILE,
 	HK_LOAD_STATE_FILE,
 
+	HK_SWITCH_STEREOSCOPY_PRESET,
+	HK_USE_STEREOSCOPY_PRESET_0,
+	HK_USE_STEREOSCOPY_PRESET_1,
+	HK_USE_STEREOSCOPY_PRESET_2,
+
 	NUM_HOTKEYS,
 };
 
@@ -132,9 +137,9 @@ public:
 	HotkeyManager();
 	~HotkeyManager();
 
-	std::string GetName() const;
 	void GetInput(HotkeyStatus* const hk);
-	void LoadDefaults(const ControllerInterface& ciface);
+	std::string GetName() const override;
+	void LoadDefaults(const ControllerInterface& ciface) override;
 
 private:
 	Buttons* m_keys[(NUM_HOTKEYS + 31) / 32];

@@ -308,6 +308,8 @@ wxMenuBar* CFrame::CreateMenu()
 	platformMenu->Check(IDM_LIST_GC, SConfig::GetInstance().m_ListGC);
 	platformMenu->AppendCheckItem(IDM_LIST_WAD, _("Show Wad"));
 	platformMenu->Check(IDM_LIST_WAD, SConfig::GetInstance().m_ListWad);
+	platformMenu->AppendCheckItem(IDM_LIST_ELFDOL, _("Show Elf/Dol"));
+	platformMenu->Check(IDM_LIST_ELFDOL, SConfig::GetInstance().m_ListElfDol);
 
 	wxMenu *regionMenu = new wxMenu;
 	viewMenu->AppendSubMenu(regionMenu, _("Show Regions"));
@@ -552,7 +554,6 @@ void CFrame::PopulateToolbar(wxToolBar* ToolBar)
 	ToolBar->AddSeparator();
 	WxUtils::AddToolbarButton(ToolBar, wxID_PREFERENCES,        _("Config"),      m_Bitmaps[Toolbar_ConfigMain],  _("Configure..."));
 	WxUtils::AddToolbarButton(ToolBar, IDM_CONFIG_GFX_BACKEND,  _("Graphics"),    m_Bitmaps[Toolbar_ConfigGFX],   _("Graphics settings"));
-	WxUtils::AddToolbarButton(ToolBar, IDM_CONFIG_AUDIO,        _("Audio"),       m_Bitmaps[Toolbar_ConfigAudio], _("Audio settings"));
 	WxUtils::AddToolbarButton(ToolBar, IDM_CONFIG_CONTROLLERS,  _("Controllers"), m_Bitmaps[Toolbar_Controller],  _("Controller settings"));
 }
 
@@ -596,7 +597,6 @@ void CFrame::InitBitmaps()
 	m_Bitmaps[Toolbar_Pause      ].LoadFile(dir + "pause.png",      wxBITMAP_TYPE_PNG);
 	m_Bitmaps[Toolbar_ConfigMain ].LoadFile(dir + "config.png",     wxBITMAP_TYPE_PNG);
 	m_Bitmaps[Toolbar_ConfigGFX  ].LoadFile(dir + "graphics.png",   wxBITMAP_TYPE_PNG);
-	m_Bitmaps[Toolbar_ConfigAudio].LoadFile(dir + "audio.png",      wxBITMAP_TYPE_PNG);
 	m_Bitmaps[Toolbar_Controller ].LoadFile(dir + "classic.png",    wxBITMAP_TYPE_PNG);
 	m_Bitmaps[Toolbar_Screenshot ].LoadFile(dir + "screenshot.png", wxBITMAP_TYPE_PNG);
 	m_Bitmaps[Toolbar_FullScreen ].LoadFile(dir + "fullscreen.png", wxBITMAP_TYPE_PNG);
@@ -845,10 +845,7 @@ void CFrame::OnPlay(wxCommandEvent& WXUNUSED (event))
 		// Core is initialized and emulator is running
 		if (UseDebugger)
 		{
-			if (CCPU::IsStepping())
-				CCPU::EnableStepping(false);
-			else
-				CCPU::EnableStepping(true);  // Break
+			CPU::EnableStepping(!CPU::IsStepping());
 
 			wxThread::Sleep(20);
 			g_pCodeWindow->JumpToAddress(PC);
@@ -1907,6 +1904,9 @@ void CFrame::GameListChanged(wxCommandEvent& event)
 	case IDM_LIST_WAD:
 		SConfig::GetInstance().m_ListWad = event.IsChecked();
 		break;
+	case IDM_LIST_ELFDOL:
+		SConfig::GetInstance().m_ListElfDol = event.IsChecked();
+		break;
 	case IDM_LIST_JAP:
 		SConfig::GetInstance().m_ListJap = event.IsChecked();
 		break;
@@ -1953,7 +1953,7 @@ void CFrame::GameListChanged(wxCommandEvent& event)
 		SConfig::GetInstance().m_ListDrives = event.IsChecked();
 		break;
 	case IDM_PURGE_CACHE:
-		std::vector<std::string> rFilenames = DoFileSearch({"*.cache"}, {File::GetUserPath(D_CACHE_IDX)});
+		std::vector<std::string> rFilenames = DoFileSearch({".cache"}, {File::GetUserPath(D_CACHE_IDX)});
 
 		for (const std::string& rFilename : rFilenames)
 		{
